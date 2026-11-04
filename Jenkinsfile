@@ -84,6 +84,7 @@ pipeline {
                         pytest-cov==4.1.0 \
                         pytest-html==4.1.1 \
                         bandit==1.7.6 \
+                        bandit-sarif-formatter \
                         pip-audit==2.6.1 \
                         --quiet
 
@@ -231,7 +232,7 @@ pipeline {
                         -c security/bandit.yaml \
                         -f sarif \
                         -o "${REPORTS_DIR}/sarif/bandit.sarif" \
-                        --exit-zero
+                        --exit-zero || echo "[WARN] Bandit SARIF output failed"
 
                     # JSON output
                     bandit -r src/ api/ services/ repositories/ factories/ \
@@ -250,7 +251,7 @@ pipeline {
                     # Console summary
                     bandit -r src/ api/ services/ repositories/ factories/ \
                         -c security/bandit.yaml \
-                        -f text \
+                        -f txt \
                         --exit-zero || true
 
                     echo "→ Bandit complete."
