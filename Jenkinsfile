@@ -5,11 +5,18 @@
 
 pipeline {
 
-    agent any   // Use 'agent { docker { image "python:3.11-slim" } }' for Docker agents
+    // Run every stage inside a python:3.11-slim Docker container.
+    // Requires: Jenkins agent has Docker installed and jenkins user is in the docker group.
+    agent {
+        docker {
+            image 'python:3.11-slim'
+            args  '-u root --privileged -v /var/run/docker.sock:/var/run/docker.sock'
+        }
+    }
 
     // ── Environment variables ────────────────────────────────
     environment {
-        VENV_DIR              = "${WORKSPACE}/.venv"
+        // No VENV_DIR needed — Docker container already has Python isolated
         REPORTS_DIR           = "${WORKSPACE}/reports"
         DC_HOME               = "${WORKSPACE}/tools/dependency-check"
         DC_CLI                = "${DC_HOME}/bin/dependency-check.sh"
@@ -60,15 +67,16 @@ pipeline {
                 sh '''#!/bin/bash
                     set -e
 
-                    echo "→ Creating Python virtual environment..."
-                    python3 -m venv "${VENV_DIR}"
-                    source "${VENV_DIR}/bin/activate"
+                    echo "→ Installing system dependencies (curl, unzip, Java for OWASP DC)..."
+                    apt-get update -qq
+                    apt-get install -y -qq curl unzip default-jre-headless 2>/dev/null
+                    echo "   System packages ready."
 
                     echo "→ Upgrading pip..."
-                    pip install --upgrade pip wheel setuptools
+                    pip install --upgrade pip wheel setuptools --quiet
 
                     echo "→ Installing project dependencies..."
-                    pip install -r requirements.txt
+                    pip install -r requirements.txt --quiet
 
                     echo "→ Installing DevSecOps tooling..."
                     pip install \
@@ -76,7 +84,8 @@ pipeline {
                         pytest-cov==4.1.0 \
                         pytest-html==4.1.1 \
                         bandit==1.7.6 \
-                        pip-audit==2.6.1
+                        pip-audit==2.6.1 \
+                        --quiet
 
                     echo "→ Installed packages:"
                     pip list
@@ -116,7 +125,6 @@ pipeline {
                 echo "╚══════════════════════════════╝"
                 sh '''#!/bin/bash
                     set -e
-                    source "${VENV_DIR}/bin/activate"
 
                     python -m pytest tests/ \
                         --tb=short \
@@ -167,7 +175,7 @@ pipeline {
                 echo "║  Stage 4: pip-audit (SCA)    ║"
                 echo "╚══════════════════════════════╝"
                 sh '''#!/bin/bash
-                    source "${VENV_DIR}/bin/activate"
+                    set -e
 
                     echo "→ Running pip-audit on requirements.txt..."
 
@@ -206,7 +214,7 @@ pipeline {
                 echo "║  Stage 5: Bandit (SAST)      ║"
                 echo "╚══════════════════════════════╝"
                 sh '''#!/bin/bash
-                    source "${VENV_DIR}/bin/activate"
+                    set -e
 
                     echo "→ Running Bandit static security analysis..."
 
@@ -377,7 +385,7 @@ pipeline {
                 echo "║  Stage 8: Quality Gate       ║"
                 echo "╚══════════════════════════════╝"
                 sh '''#!/bin/bash
-                    source "${VENV_DIR}/bin/activate"
+                    set -e
                     echo "→ Evaluating security quality gate (threshold: ${QUALITY_GATE_SEVERITY})..."
 
                     GATE_PASSED=true
