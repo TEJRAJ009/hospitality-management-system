@@ -96,7 +96,7 @@ pipeline {
 
                     echo "→ Checking / installing Trivy..."
                     if ! command -v trivy &>/dev/null; then
-                        TRIVY_VERSION="0.48.3"
+                        TRIVY_VERSION="0.71.2"
                         TRIVY_TGZ="trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
                         # Download release tarball directly (errors stay visible, no pipe-to-sh)
                         curl -fSL --retry 3 --retry-delay 5 -o "/tmp/${TRIVY_TGZ}" \

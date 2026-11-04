@@ -6,7 +6,7 @@
 # ── Scan settings ────────────────────────────────────────────
 scan:
   # Security checks to enable
-  security-checks:
+  scanners:
     - vuln          # Known vulnerabilities (CVE)
     - secret        # Hardcoded secrets / credentials
     - config        # Misconfigurations (IaC, Dockerfile, etc.)
