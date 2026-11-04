@@ -20,7 +20,7 @@ pipeline {
 
     options {
         timestamps()
-        ansiColor('xterm')
+        // ansiColor('xterm')  // uncomment after installing the AnsiColor plugin
         timeout(time: 60, unit: 'MINUTES')
         disableConcurrentBuilds()
         buildDiscarder(logRotator(numToKeepStr: '10'))
