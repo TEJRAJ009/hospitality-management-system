@@ -1,0 +1,13 @@
+﻿# ============================================================
+#  Trivy .trivyignore — CVE / Secret Allowlist
+#  Format: one CVE-ID or rule ID per line
+#  Ref: https://aquasecurity.github.io/trivy/latest/docs/configuration/filtering/#trivyignore
+# ============================================================
+
+# ── Example suppressions (add your own below) ────────────────
+
+# CVE-2023-XXXXX  # Reason: not applicable — only triggered in Windows env
+# CVE-2022-XXXXX  # Reason: mitigated by network-level control, accepted risk
+
+# ── Secret rule suppressions ─────────────────────────────────
+# generic-api-key  # Reason: false positive — not a real key

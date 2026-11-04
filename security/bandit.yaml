@@ -1,0 +1,32 @@
+﻿# ============================================================
+#  Bandit SAST Configuration — HotelHub
+#  Ref: https://bandit.readthedocs.io/en/latest/config.html
+# ============================================================
+
+# Tests to run (empty = run all)
+tests:
+
+# Tests to skip (false positives for this project)
+skips:
+  - B101  # Use of assert — common in tests, not production risk
+  - B104  # Binding to all interfaces — acceptable for dev server
+  - B311  # Standard pseudo-random — not used for security context here
+
+# Severity level to report: LOW, MEDIUM, HIGH
+# Only flag MEDIUM and above to reduce noise
+severity: MEDIUM
+
+# Confidence level: LOW, MEDIUM, HIGH
+confidence: MEDIUM
+
+# Paths to exclude from scanning
+exclude_dirs:
+  - tests/
+  - .venv/
+  - tools/
+  - reports/
+  - __pycache__/
+  - .git/
+
+# Output verbosity
+verbose: false

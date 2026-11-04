@@ -1,0 +1,51 @@
+﻿# ============================================================
+#  Trivy Configuration — HotelHub
+#  Ref: https://aquasecurity.github.io/trivy/latest/docs/references/configuration/config-file/
+# ============================================================
+
+# ── Scan settings ────────────────────────────────────────────
+scan:
+  # Security checks to enable
+  security-checks:
+    - vuln          # Known vulnerabilities (CVE)
+    - secret        # Hardcoded secrets / credentials
+    - config        # Misconfigurations (IaC, Dockerfile, etc.)
+
+  # Skip hidden directories
+  skip-dirs:
+    - .venv
+    - .git
+    - tools
+    - reports
+    - __pycache__
+    - node_modules
+
+  # Skip specific files
+  skip-files:
+    - "*.lock"
+
+# ── Vulnerability settings ───────────────────────────────────
+vulnerability:
+  # Ignore vulnerabilities without a fix available
+  ignore-unfixed: false
+  # Type of vuln sources to include
+  type:
+    - os
+    - library
+
+# ── Report settings ──────────────────────────────────────────
+# Default severity filter (overridden by pipeline TRIVY_SEVERITY env var)
+severity:
+  - HIGH
+  - CRITICAL
+
+# ── Secret scanning ──────────────────────────────────────────
+secret:
+  config: ""   # Use default secret rules
+
+# ── Timeout ─────────────────────────────────────────────────
+timeout: 10m0s
+
+# ── Cache ────────────────────────────────────────────────────
+cache:
+  dir: /tmp/trivy-cache
