@@ -111,14 +111,16 @@ pipeline {
                     trivy --version
 
                     echo "→ Checking / installing OWASP Dependency-Check..."
-                    if [ ! -f "${DC_CLI}" ]; then
+                    DC_VERSION="10.0.4"
+                    if [ ! -f "${DC_CLI}" ] || [ "$(cat "${DC_HOME}/.version" 2>/dev/null)" != "${DC_VERSION}" ]; then
+                        rm -rf "${DC_HOME}"
                         mkdir -p "${WORKSPACE}/tools"
-                        DC_VERSION="9.0.7"
                         DC_ZIP="dependency-check-${DC_VERSION}-release.zip"
-                        curl -sLo "/tmp/${DC_ZIP}" \
+                        curl -fSL --retry 3 -o "/tmp/${DC_ZIP}" \
                             "https://github.com/jeremylong/DependencyCheck/releases/download/v${DC_VERSION}/${DC_ZIP}"
                         unzip -q "/tmp/${DC_ZIP}" -d "${WORKSPACE}/tools/"
                         chmod +x "${DC_CLI}"
+                        echo "${DC_VERSION}" > "${DC_HOME}/.version"
                         rm "/tmp/${DC_ZIP}"
                     fi
                     echo "OWASP DC ready: ${DC_CLI}"
@@ -335,6 +337,7 @@ pipeline {
 
         // ── 7. DEEP SCA — OWASP Dependency-Check ─────────────
         stage('SCA: OWASP Dependency-Check') {
+            options { timeout(time: 30, unit: 'MINUTES') }
             steps {
                 echo "╔══════════════════════════════╗"
                 echo "║  Stage 7: OWASP Dep-Check    ║"
@@ -352,6 +355,8 @@ pipeline {
                                --suppression security/owasp-suppression.xml \
                                --enableRetired \
                                --disableAssembly \
+                               --nvdApiDelay 3000 \
+                               --nvdMaxRetryCount 5 \
                                --failOnCVSS 9 \
                                --log ${REPORTS_DIR}/owasp/dc.log"
 
