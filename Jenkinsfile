@@ -105,13 +105,14 @@ pipeline {
                         TRIVY_VERSION="0.71.2"
                         TRIVY_TGZ="trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
                         # Download release tarball directly (errors stay visible, no pipe-to-sh)
-                        curl -fSL --retry 3 --retry-delay 5 -o "/tmp/${TRIVY_TGZ}" \
+                        mkdir -p "${WORKSPACE}/tools/cache"
+                        [ -s "${WORKSPACE}/tools/cache/${TRIVY_TGZ}" ] || curl -fSL --retry 8 --retry-all-errors --retry-delay 10 --connect-timeout 30 -o "${WORKSPACE}/tools/cache/${TRIVY_TGZ}" \
                             "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/${TRIVY_TGZ}"
                         mkdir -p /tmp/trivy-extract /usr/local/share/trivy/templates
-                        tar -xzf "/tmp/${TRIVY_TGZ}" -C /tmp/trivy-extract
+                        tar -xzf "${WORKSPACE}/tools/cache/${TRIVY_TGZ}" -C /tmp/trivy-extract
                         install -m 0755 /tmp/trivy-extract/trivy /usr/local/bin/trivy
                         cp /tmp/trivy-extract/contrib/*.tpl /usr/local/share/trivy/templates/ 2>/dev/null || true
-                        rm -rf /tmp/trivy-extract "/tmp/${TRIVY_TGZ}"
+                        rm -rf /tmp/trivy-extract
                     fi
                     trivy --version
 
@@ -121,7 +122,7 @@ pipeline {
                         rm -rf "${DC_HOME}"
                         mkdir -p "${WORKSPACE}/tools"
                         DC_ZIP="dependency-check-${DC_VERSION}-release.zip"
-                        curl -fSL --retry 3 -o "/tmp/${DC_ZIP}" \
+                        curl -fSL --retry 8 --retry-all-errors --retry-delay 10 --connect-timeout 30 -o "/tmp/${DC_ZIP}" \
                             "https://github.com/jeremylong/DependencyCheck/releases/download/v${DC_VERSION}/${DC_ZIP}"
                         unzip -q "/tmp/${DC_ZIP}" -d "${WORKSPACE}/tools/"
                         chmod +x "${DC_CLI}"
