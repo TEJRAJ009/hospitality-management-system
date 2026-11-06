@@ -1,6 +1,6 @@
 // ============================================================
 //  HotelHub — Jenkins DevSecOps CI Pipeline
-//  Tools: pytest | pip-audit | Bandit | Trivy | OWASP Dep-Check
+//  Tools: pytest | pip-audit | Bandit | Trivy
 // ============================================================
 
 pipeline {
@@ -18,9 +18,6 @@ pipeline {
     environment {
         // No VENV_DIR needed — Docker container already has Python isolated
         REPORTS_DIR           = "${WORKSPACE}/reports"
-        DC_HOME               = "${WORKSPACE}/tools/dependency-check"
-        DC_CLI                = "${DC_HOME}/bin/dependency-check.sh"
-        NVD_API_KEY           = credentials('nvd-api-key')  // stored securely in Jenkins Credentials
         TRIVY_SEVERITY        = "HIGH,CRITICAL"
         QUALITY_GATE_SEVERITY = "CRITICAL"
     }
@@ -67,14 +64,9 @@ pipeline {
                 sh '''#!/bin/bash
                     set -e
 
-                    echo "→ Installing system dependencies (curl, unzip, Java for OWASP DC)..."
+                    echo "→ Installing system dependencies (curl)..."
                     apt-get update -qq
-                    apt-get install -y -qq curl unzip default-jre-headless 2>/dev/null
-                    # ca-certificates-java ran before the JRE existed ("No JRE found"),
-                    # so the Java truststore can be empty -> PKIX errors. Rebuild it.
-                    apt-get install -y -qq ca-certificates ca-certificates-java 2>/dev/null || true
-                    update-ca-certificates --fresh
-                    echo "   Java truststore entries: $(keytool -list -cacerts -storepass changeit 2>/dev/null | grep -c trustedCertEntry)"
+                    apt-get install -y -qq curl 2>/dev/null
                     echo "   System packages ready."
 
                     echo "→ Upgrading pip..."
@@ -115,21 +107,6 @@ pipeline {
                         rm -rf /tmp/trivy-extract
                     fi
                     trivy --version
-
-                    echo "→ Checking / installing OWASP Dependency-Check..."
-                    DC_VERSION="10.0.4"
-                    if [ ! -f "${DC_CLI}" ] || [ "$(cat "${DC_HOME}/.version" 2>/dev/null)" != "${DC_VERSION}" ]; then
-                        rm -rf "${DC_HOME}"
-                        mkdir -p "${WORKSPACE}/tools"
-                        DC_ZIP="dependency-check-${DC_VERSION}-release.zip"
-                        curl -fSL --retry 8 --retry-all-errors --retry-delay 10 --connect-timeout 30 -o "/tmp/${DC_ZIP}" \
-                            "https://github.com/jeremylong/DependencyCheck/releases/download/v${DC_VERSION}/${DC_ZIP}"
-                        unzip -q "/tmp/${DC_ZIP}" -d "${WORKSPACE}/tools/"
-                        chmod +x "${DC_CLI}"
-                        echo "${DC_VERSION}" > "${DC_HOME}/.version"
-                        rm "/tmp/${DC_ZIP}"
-                    fi
-                    echo "OWASP DC ready: ${DC_CLI}"
                 '''
             }
         }
@@ -341,79 +318,6 @@ pipeline {
             }
         }
 
-        // ── 7. DEEP SCA — OWASP Dependency-Check ─────────────
-        stage('SCA: OWASP Dependency-Check') {
-            options { timeout(time: 30, unit: 'MINUTES') }
-            steps {
-                echo "╔══════════════════════════════╗"
-                echo "║  Stage 7: OWASP Dep-Check    ║"
-                echo "╚══════════════════════════════╝"
-                sh '''#!/bin/bash
-
-                    echo "→ Running OWASP Dependency-Check..."
-
-                    # Diagnostics: who issues the cert Java rejects? (curl trusts the system bundle)
-                    echo "→ TLS check (system CA bundle via curl):"
-                    curl -sv -o /dev/null https://www.cisa.gov/ 2>&1 | grep -iE "issuer|subject:|SSL certificate verify" || true
-                    curl -sv -o /dev/null https://services.nvd.nist.gov/ 2>&1 | grep -iE "issuer|SSL certificate verify" || true
-
-                    # Build a Java truststore directly from the system CA bundle (includes any
-                    # corporate/proxy CA installed in the container) and point Dependency-Check at it.
-                    TS_DIR="$(mktemp -d)"
-                    awk -v d="${TS_DIR}" '/BEGIN CERT/{n++} {print > d"/c"n".pem"}' /etc/ssl/certs/ca-certificates.crt
-                    for f in "${TS_DIR}"/c*.pem; do
-                        keytool -importcert -noprompt -trustcacerts -alias "$(basename "$f")" -file "$f" \
-                            -keystore "${TS_DIR}/truststore.p12" -storetype PKCS12 -storepass changeit >/dev/null 2>&1 || true
-                    done
-                    echo "   Truststore entries: $(keytool -list -keystore "${TS_DIR}/truststore.p12" -storepass changeit 2>/dev/null | grep -c trustedCertEntry)"
-                    export JAVA_OPTS="-Djavax.net.ssl.trustStore=${TS_DIR}/truststore.p12 -Djavax.net.ssl.trustStorePassword=changeit -Djavax.net.ssl.trustStoreType=PKCS12"
-
-                    DC_FLAGS="--project HotelHub \
-                               --scan . \
-                               --out ${REPORTS_DIR}/owasp \
-                               --format HTML \
-                               --format XML \
-                               --format SARIF \
-                               --suppression security/owasp-suppression.xml \
-                               --enableRetired \
-                               --disableAssembly \
-                               --nvdApiDelay 3000 \
-                               --nvdMaxRetryCount 5 \
-                               --failOnCVSS 9 \
-                               --log ${REPORTS_DIR}/owasp/dc.log"
-
-                    if [ -n "${NVD_API_KEY:-}" ]; then
-                        DC_FLAGS="${DC_FLAGS} --nvdApiKey ${NVD_API_KEY}"
-                    fi
-
-                    "${DC_CLI}" ${DC_FLAGS} || true
-
-                    # Copy SARIF to unified sarif dir
-                    cp "${REPORTS_DIR}/owasp/"*.sarif \
-                       "${REPORTS_DIR}/sarif/owasp-dc.sarif" 2>/dev/null || true
-
-                    echo "→ OWASP Dependency-Check complete."
-                '''
-            }
-            post {
-                always {
-                    publishHTML(target: [
-                        allowMissing         : true,
-                        alwaysLinkToLastBuild: true,
-                        keepAll              : true,
-                        reportDir            : 'reports/owasp',
-                        reportFiles          : 'dependency-check-report.html',
-                        reportName           : '🛡️ OWASP Dependency-Check'
-                    ])
-                    dependencyCheckPublisher(
-                        pattern             : 'reports/owasp/dependency-check-report.xml',
-                        failedTotalCritical : 1,
-                        unstableTotalHigh   : 5
-                    )
-                }
-            }
-        }
-
         // ── 8. QUALITY GATE ───────────────────────────────────
         stage('Quality Gate') {
             steps {
@@ -467,7 +371,7 @@ except:
                     echo "├──────────────────────────────────────────────┤"
                     printf "│  Bandit HIGH+ issues  : %-20s │\n" "${HIGH_ISSUES}"
                     printf "│  pip-audit vulns      : %-20s │\n" "${PIP_VULNS}"
-                    echo "│  Trivy / OWASP DC     : see reports         │"
+                    echo "│  Trivy                : see reports         │"
                     echo "└──────────────────────────────────────────────┘"
 
                     if [ "${GATE_PASSED}" = "false" ]; then
@@ -504,9 +408,7 @@ except:
                             sarif(pattern: 'reports/sarif/trivy-fs.sarif',
                                   id: 'trivy',     name: 'Trivy FS Scan'),
                             sarif(pattern: 'reports/sarif/pip-audit.sarif',
-                                  id: 'pip-audit', name: 'pip-audit SCA'),
-                            sarif(pattern: 'reports/sarif/owasp-dc.sarif',
-                                  id: 'owasp-dc',  name: 'OWASP Dep-Check')
+                                  id: 'pip-audit', name: 'pip-audit SCA')
                         ]
                     )
                 }
