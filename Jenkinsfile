@@ -70,6 +70,11 @@ pipeline {
                     echo "→ Installing system dependencies (curl, unzip, Java for OWASP DC)..."
                     apt-get update -qq
                     apt-get install -y -qq curl unzip default-jre-headless 2>/dev/null
+                    # ca-certificates-java ran before the JRE existed ("No JRE found"),
+                    # so the Java truststore can be empty -> PKIX errors. Rebuild it.
+                    apt-get install -y -qq ca-certificates ca-certificates-java 2>/dev/null || true
+                    update-ca-certificates --fresh
+                    echo "   Java truststore entries: $(keytool -list -cacerts -storepass changeit 2>/dev/null | grep -c trustedCertEntry)"
                     echo "   System packages ready."
 
                     echo "→ Upgrading pip..."
