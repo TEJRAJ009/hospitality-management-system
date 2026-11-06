@@ -351,6 +351,22 @@ pipeline {
 
                     echo "→ Running OWASP Dependency-Check..."
 
+                    # Diagnostics: who issues the cert Java rejects? (curl trusts the system bundle)
+                    echo "→ TLS check (system CA bundle via curl):"
+                    curl -sv -o /dev/null https://www.cisa.gov/ 2>&1 | grep -iE "issuer|subject:|SSL certificate verify" || true
+                    curl -sv -o /dev/null https://services.nvd.nist.gov/ 2>&1 | grep -iE "issuer|SSL certificate verify" || true
+
+                    # Build a Java truststore directly from the system CA bundle (includes any
+                    # corporate/proxy CA installed in the container) and point Dependency-Check at it.
+                    TS_DIR="$(mktemp -d)"
+                    awk -v d="${TS_DIR}" '/BEGIN CERT/{n++} {print > d"/c"n".pem"}' /etc/ssl/certs/ca-certificates.crt
+                    for f in "${TS_DIR}"/c*.pem; do
+                        keytool -importcert -noprompt -trustcacerts -alias "$(basename "$f")" -file "$f" \
+                            -keystore "${TS_DIR}/truststore.p12" -storetype PKCS12 -storepass changeit >/dev/null 2>&1 || true
+                    done
+                    echo "   Truststore entries: $(keytool -list -keystore "${TS_DIR}/truststore.p12" -storepass changeit 2>/dev/null | grep -c trustedCertEntry)"
+                    export JAVA_OPTS="-Djavax.net.ssl.trustStore=${TS_DIR}/truststore.p12 -Djavax.net.ssl.trustStorePassword=changeit -Djavax.net.ssl.trustStoreType=PKCS12"
+
                     DC_FLAGS="--project HotelHub \
                                --scan . \
                                --out ${REPORTS_DIR}/owasp \
