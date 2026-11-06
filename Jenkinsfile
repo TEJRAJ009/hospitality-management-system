@@ -181,14 +181,6 @@ pipeline {
                         --progress-spinner off \
                     || true
 
-                    # SARIF report
-                    pip-audit \
-                        --requirement requirements.txt \
-                        --format sarif \
-                        --output "${REPORTS_DIR}/sarif/pip-audit.sarif" \
-                        --progress-spinner off \
-                    || true
-
                     # Human-readable console output
                     pip-audit \
                         --requirement requirements.txt \
@@ -397,20 +389,6 @@ except:
                     archiveArtifacts artifacts: 'reports/**/*',
                                      allowEmptyArchive: true,
                                      fingerprint: true
-
-                    // SARIF → Warnings Next Generation plugin
-                    recordIssues(
-                        enabledForFailure: true,
-                        aggregatingResults: true,
-                        tools: [
-                            sarif(pattern: 'reports/sarif/bandit.sarif',
-                                  id: 'bandit',    name: 'Bandit SAST'),
-                            sarif(pattern: 'reports/sarif/trivy-fs.sarif',
-                                  id: 'trivy',     name: 'Trivy FS Scan'),
-                            sarif(pattern: 'reports/sarif/pip-audit.sarif',
-                                  id: 'pip-audit', name: 'pip-audit SCA')
-                        ]
-                    )
                 }
             }
         }
